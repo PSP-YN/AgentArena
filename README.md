@@ -94,3 +94,12 @@ Supported `fault_mode` values:
 ## Hackathon
 
 Geek Room Global AI Hackathon — Bifrost Priority Track: “Build a Benchmarking Platform for AI Agents, Not Just Models.”
+
+
+## Vercel environment
+
+For hosted runs, configure these in the Vercel project settings (never commit them):
+
+- `BIFROST_BASE_URL`: publicly/reachably hosted gateway URL. **Do not use localhost** for Vercel; that points to the serverless runtime, not your laptop.
+- `BIFROST_API_KEY`: inference key if the gateway requires one.
+- `BIFROST_LOGS_API_KEY`: separate management key with `Logs:View` permission to read actual cost records. Without it, cost remains unknown.
