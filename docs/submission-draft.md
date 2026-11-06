@@ -46,6 +46,10 @@ AI is used for agent execution and tool selection through Bifrost. AgentArena it
 
 https://github.com/PSP-YN/AgentArena
 
+## Hosted preview
+
+https://agentarena-pspyn.vercel.app (currently team SSO-protected; not yet a public judge link)
+
 ## Demo
 
 See [demo-script.md](demo-script.md).
