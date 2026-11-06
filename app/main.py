@@ -14,7 +14,7 @@ from app.metrics import summarize_runs
 from app.providers.bifrost import BifrostError, call_bifrost, attach_trace_cost
 from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
 from app.tasks import BUILTIN_TASKS
-from app.storage import list_results, save_result, storage_enabled
+from app.storage import check_storage, list_results, save_result, storage_enabled
 import uuid
 
 app = FastAPI(
@@ -111,6 +111,20 @@ def list_tasks():
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "AgentArena", "version": app.version}
+
+
+@app.get("/ready")
+def readiness():
+    required = os.getenv("AGENTARENA_REQUIRE_DATABASE", "false").lower() in {"1", "true", "yes"}
+    if not storage_enabled():
+        if required:
+            raise HTTPException(status_code=503, detail="Durable storage is required but DATABASE_URL is not configured")
+        return {"status": "ready", "storage": "disabled"}
+    try:
+        check_storage()
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Database readiness check failed") from exc
+    return {"status": "ready", "storage": "connected"}
 
 
 @app.post("/api/v1/runs")
