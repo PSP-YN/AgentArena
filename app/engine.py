@@ -1,7 +1,7 @@
 """Core AgentArena benchmark engine.
 
-This module deliberately separates observed agent metrics from estimated values.
-No token/cost numbers are invented when the agent adapter does not provide them.
+Observed metrics and estimated metrics are kept separate. Missing values remain
+unknown rather than being silently converted to zero.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from typing import Any, Callable
 @dataclass
 class AgentResponse:
     output: str
+    steps: int = 1
     tool_calls: int = 0
     input_tokens: int | None = None
     output_tokens: int | None = None
@@ -39,6 +40,7 @@ class BenchmarkResult:
     success: bool
     score: float
     duration_ms: float
+    steps: int
     tool_calls: int
     input_tokens: int | None
     output_tokens: int | None
@@ -74,6 +76,7 @@ def run_task(task: BenchmarkTask, agent_name: str, agent: Agent) -> BenchmarkRes
         success=score >= 1.0,
         score=score,
         duration_ms=round(duration_ms, 3),
+        steps=max(1, response.steps),
         tool_calls=response.tool_calls,
         input_tokens=response.input_tokens,
         output_tokens=response.output_tokens,
