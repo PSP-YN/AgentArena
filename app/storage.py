@@ -93,3 +93,18 @@ def list_results(limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
         return [json.loads(row[0]) for row in rows]
     finally:
         engine.dispose()
+
+
+
+def check_storage() -> bool:
+    """Verify database connectivity and ensure the history schema exists."""
+    engine = _engine()
+    if engine is None:
+        return False
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        _ensure_table(engine)
+        return True
+    finally:
+        engine.dispose()
