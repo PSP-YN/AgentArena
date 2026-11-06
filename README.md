@@ -107,3 +107,8 @@ For hosted runs, configure these in the Vercel project settings (never commit th
 - `BIFROST_BASE_URL`: publicly/reachably hosted gateway URL. **Do not use localhost** for Vercel; that points to the serverless runtime, not your laptop.
 - `BIFROST_API_KEY`: inference key if the gateway requires one.
 - `BIFROST_LOGS_API_KEY`: separate management key with `Logs:View` permission to read actual cost records. Without it, cost remains unknown.
+
+
+## Privacy
+
+AgentArena sends benchmark prompts and tool messages to the configured Bifrost model/provider. Use non-sensitive tasks. Bifrost logging is controlled by your gateway configuration; the app does not persist benchmark history in a database in this MVP.
