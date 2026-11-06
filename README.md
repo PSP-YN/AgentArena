@@ -24,7 +24,9 @@ Requirements: Python 3.12+ and a running Bifrost gateway for live model calls.
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+cp .env.example .env
+# Configure the gateway values in .env
+uvicorn app.main:app --reload --env-file .env
 ```
 
 Open the dashboard at http://localhost:8000 and API docs at http://localhost:8000/docs.
@@ -36,6 +38,7 @@ Start Bifrost (for example, with its official local Docker/NPX quickstart), conf
 ```bash
 export BIFROST_BASE_URL=http://localhost:8080
 export BIFROST_API_KEY= # optional if your gateway requires it
+export BIFROST_LOGS_API_KEY= # optional management key with Logs:View permission
 ```
 
 The gateway adapter uses the OpenAI-compatible `/v1/chat/completions` endpoint. Live model comparison calls the tool-loop agent.
@@ -75,7 +78,7 @@ Supported `fault_mode` values:
 - Step count means Bifrost model request steps in the current tool loop.
 - Tool calls count the model-emitted and executed allowlisted tool calls.
 - Token counts are reported only when all model-step usage needed for aggregation is present.
-- Cost is unknown unless a trusted cost source is added; it is not estimated.
+- Cost is retrieved from Bifrost logs when BIFROST_LOGS_API_KEY has Logs:View permission and logging is enabled. Otherwise it remains unknown; it is not estimated.
 - Fault-injection fixtures are synthetic and clearly separated from real external data.
 - The current agent has a bounded loop and only two safe tools; arbitrary agent-framework adapters and more evaluation tasks remain future work.
 - Exact-match scoring is intentionally simple and task-specific.
