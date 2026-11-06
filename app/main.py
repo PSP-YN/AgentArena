@@ -48,7 +48,11 @@ async def protect_expensive_api_routes(request: Request, call_next):
             content={"detail": "Durable storage is required but DATABASE_URL is not configured"},
         )
     configured_key = os.getenv("AGENTARENA_API_KEY", "").strip()
-    if request.method == "POST" and request.url.path in protected and configured_key:
+    requires_auth = (
+        (request.method == "POST" and request.url.path in protected - {"/api/v1/history"})
+        or (request.method == "GET" and request.url.path == "/api/v1/history")
+    )
+    if requires_auth and configured_key:
         supplied = request.headers.get("x-api-key", "")
         authorization = request.headers.get("authorization", "")
         if authorization.lower().startswith("bearer "):
