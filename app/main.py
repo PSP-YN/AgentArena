@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.engine import AgentResponse, BenchmarkTask, run_task
@@ -26,6 +30,11 @@ class BifrostRunRequest(BaseModel):
     expected_output: str
     model: str = Field(min_length=1, description="Bifrost model route, e.g. provider/model")
     scorer: str = "normalized_exact_match"
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/ui/")
 
 
 @app.get("/health")
@@ -80,3 +89,10 @@ def create_bifrost_run(request: BifrostRunRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return result.__dict__
+
+
+app.mount(
+    "/ui",
+    StaticFiles(directory=Path(__file__).resolve().parent.parent / "static", html=True),
+    name="ui",
+)
