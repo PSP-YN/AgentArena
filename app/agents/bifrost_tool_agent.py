@@ -67,20 +67,23 @@ def safe_calculate(expression: str) -> int | float:
             left, right = visit(current.left), visit(current.right)
             if isinstance(current.op, ast.Pow) and abs(right) > 6:
                 raise CalculatorError("Exponent too large")
-            if isinstance(current.op, ast.Add):
-                result = left + right
-            elif isinstance(current.op, ast.Sub):
-                result = left - right
-            elif isinstance(current.op, ast.Mult):
-                result = left * right
-            elif isinstance(current.op, ast.Div):
-                result = left / right
-            elif isinstance(current.op, ast.FloorDiv):
-                result = left // right
-            elif isinstance(current.op, ast.Mod):
-                result = left % right
-            else:
-                result = left ** right
+            try:
+                if isinstance(current.op, ast.Add):
+                    result = left + right
+                elif isinstance(current.op, ast.Sub):
+                    result = left - right
+                elif isinstance(current.op, ast.Mult):
+                    result = left * right
+                elif isinstance(current.op, ast.Div):
+                    result = left / right
+                elif isinstance(current.op, ast.FloorDiv):
+                    result = left // right
+                elif isinstance(current.op, ast.Mod):
+                    result = left % right
+                else:
+                    result = left ** right
+            except (ZeroDivisionError, OverflowError) as exc:
+                raise CalculatorError("Invalid arithmetic operation") from exc
             if abs(result) > 1e12:
                 raise CalculatorError("Result too large")
             return result
@@ -231,8 +234,11 @@ def run_bifrost_tool_agent(
                 "event": "tool_call",
                 "step": step,
                 "tool": name,
+                "tool_call_id": call.get("id"),
+                "arguments": args,
                 "fault_mode": fault_mode,
                 "result_type": "error" if result.startswith("ToolError:") else "success",
+                "result_preview": result[:200],
             })
             messages.append({
                 "role": "tool",
