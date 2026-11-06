@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import time
 import hmac
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -67,34 +67,34 @@ async def protect_expensive_api_routes(request: Request, call_next):
 
 
 class RunRequest(BaseModel):
-    task_id: str = Field(min_length=1, max_length=120)
+    task_id: str = Field(min_length=1, max_length=120, pattern=r".*\S.*")
     prompt: str = Field(max_length=12000)
     expected_output: str = Field(max_length=4000)
     actual_output: str = Field(max_length=12000)
     agent_name: str = Field(default="manual-adapter", max_length=120)
-    scorer: str = Field(default="normalized_exact_match", max_length=64)
+    scorer: Literal["normalized_exact_match", "contains"] = "normalized_exact_match"
     steps: int = Field(default=1, ge=1, le=1000)
     tool_calls: int = Field(default=0, ge=0, le=10000)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
-    cost_usd: float | None = Field(default=None, ge=0)
+    cost_usd: float | None = Field(default=None, ge=0, allow_inf_nan=False)
 
 
 class BifrostRunRequest(BaseModel):
-    task_id: str = Field(min_length=1, max_length=120)
+    task_id: str = Field(min_length=1, max_length=120, pattern=r".*\S.*")
     prompt: str = Field(min_length=1, max_length=12000)
     expected_output: str = Field(max_length=4000)
-    model: str = Field(min_length=1, max_length=200, description="Bifrost model route, e.g. provider/model")
-    scorer: str = Field(default="normalized_exact_match", max_length=64)
+    model: str = Field(min_length=1, max_length=200, pattern=r".*\S.*", description="Bifrost model route, e.g. provider/model")
+    scorer: Literal["normalized_exact_match", "contains"] = "normalized_exact_match"
 
 
 class BifrostBenchmarkRequest(BaseModel):
-    task_id: str = Field(min_length=1, max_length=120)
+    task_id: str = Field(min_length=1, max_length=120, pattern=r".*\S.*")
     prompt: str = Field(min_length=1, max_length=12000)
     expected_output: str = Field(max_length=4000)
-    models: list[str] = Field(min_length=1, max_length=3)
+    models: list[Annotated[str, Field(min_length=1, max_length=200, pattern=r".*\S.*")]] = Field(min_length=1, max_length=3)
     repeats: int = Field(default=2, ge=1, le=5)
-    scorer: str = Field(default="normalized_exact_match", max_length=64)
+    scorer: Literal["normalized_exact_match", "contains"] = "normalized_exact_match"
     fault_mode: Literal["none", "tool_error_once", "misleading_tool_output", "provider_outage"] = "none"
 
 
