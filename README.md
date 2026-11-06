@@ -125,7 +125,7 @@ The API now supports optional protection for inference-triggering POST endpoints
 
 Set `AGENTARENA_API_KEY` to a long, random secret in the server environment. Clients can send it as either `Authorization: Bearer <key>` or `x-api-key: <key>`. The dashboard includes a password field and keeps the key in per-tab session storage. When unset, the API remains unauthenticated for local development. **Do not leave this unset on a public deployment that permits model calls.**
 
-The `GET /api/v1/history` endpoint returns persisted run records and uses the same API-key protection. `DATABASE_URL` enables durable history; `AGENTARENA_REQUIRE_DATABASE=true` makes inference endpoints fail closed when no database URL is configured. The app creates the `agentarena_runs` table automatically. Use a managed PostgreSQL database in serverless hosting.
+The `GET /api/v1/history` endpoint returns persisted run records and uses the same API-key protection. `DATABASE_URL` enables durable history; `AGENTARENA_REQUIRE_DATABASE=true` enables hosted fail-closed behavior: inference/history requires an API key, readiness requires a reachable non-local Bifrost URL, and inference is blocked if the database URL is missing. The app creates the `agentarena_runs` table automatically. Use a managed PostgreSQL database in serverless hosting.
 
 Input sizes and counts are bounded using Pydantic validation. Requests exceeding the documented field limits receive HTTP 422.
 
