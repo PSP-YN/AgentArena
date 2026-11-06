@@ -14,6 +14,8 @@ from app.metrics import summarize_runs
 from app.providers.bifrost import BifrostError, call_bifrost, attach_trace_cost
 from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
 from app.tasks import BUILTIN_TASKS
+from app.storage import list_results, save_result, storage_enabled
+import uuid
 
 app = FastAPI(
     title="AgentArena",
@@ -33,7 +35,18 @@ async def protect_expensive_api_routes(request: Request, call_next):
         "/api/v1/runs",
         "/api/v1/bifrost-runs",
         "/api/v1/bifrost-benchmarks",
+        "/api/v1/history",
     }
+    if (
+        request.method == "POST"
+        and request.url.path in protected
+        and os.getenv("AGENTARENA_REQUIRE_DATABASE", "false").lower() in {"1", "true", "yes"}
+        and not storage_enabled()
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Durable storage is required but DATABASE_URL is not configured"},
+        )
     configured_key = os.getenv("AGENTARENA_API_KEY", "").strip()
     if request.method == "POST" and request.url.path in protected and configured_key:
         supplied = request.headers.get("x-api-key", "")
@@ -121,7 +134,13 @@ def create_run(request: RunRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return result.__dict__
+    record = result.__dict__
+    if storage_enabled():
+        try:
+            save_result(record, "manual")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Benchmark completed but could not be saved to durable history") from exc
+    return record
 
 
 @app.post("/api/v1/bifrost-runs")
@@ -143,7 +162,13 @@ def create_bifrost_run(request: BifrostRunRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return attach_trace_cost(result.__dict__)
+    record = attach_trace_cost(result.__dict__)
+    if storage_enabled():
+        try:
+            save_result(record, "bifrost_single")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Benchmark completed but could not be saved to durable history") from exc
+    return record
 
 
 @app.post("/api/v1/bifrost-benchmarks")
@@ -175,6 +200,7 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
                 record["trial"] = trial
             except BifrostError as exc:
                 record = {
+                    "run_id": str(uuid.uuid4()),
                     "task_id": task.task_id,
                     "agent_name": f"bifrost-tool-agent:{model}",
                     "success": False,
@@ -189,6 +215,13 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
                     "error": str(exc),
                     "trial": trial,
                 }
+            record["model"] = model
+            record["fault_mode"] = request.fault_mode
+            if storage_enabled():
+                try:
+                    save_result(record, "bifrost_comparison")
+                except Exception as exc:
+                    raise HTTPException(status_code=503, detail="Benchmark completed but could not be saved to durable history") from exc
             runs.append(record)
 
         comparisons.append({
@@ -204,6 +237,18 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
         "models": comparisons,
         "note": "Observed metrics only. Cost is null unless all runs provide trusted cost values.",
     }
+
+
+@app.get("/api/v1/history")
+def benchmark_history(limit: int = 25, offset: int = 0):
+    if not storage_enabled():
+        raise HTTPException(status_code=503, detail="DATABASE_URL is not configured; durable history is unavailable")
+    if limit < 1 or limit > 100 or offset < 0:
+        raise HTTPException(status_code=422, detail="limit must be 1–100 and offset must be non-negative")
+    try:
+        return {"runs": list_results(limit=limit, offset=offset), "limit": limit, "offset": offset}
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Could not read durable benchmark history") from exc
 
 
 app.mount(
