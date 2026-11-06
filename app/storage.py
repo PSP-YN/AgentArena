@@ -26,6 +26,10 @@ def _engine() -> Engine | None:
     url = database_url()
     if not url:
         return None
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
     return create_engine(url, pool_pre_ping=True, pool_recycle=300)
 
 
