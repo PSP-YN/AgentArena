@@ -52,6 +52,9 @@ async def protect_expensive_api_routes(request: Request, call_next):
         (request.method == "POST" and request.url.path in protected - {"/api/v1/history"})
         or (request.method == "GET" and request.url.path == "/api/v1/history")
     )
+    production_mode = os.getenv("AGENTARENA_REQUIRE_DATABASE", "false").lower() in {"1", "true", "yes"}
+    if requires_auth and production_mode and not configured_key:
+        return JSONResponse(status_code=503, content={"detail": "AGENTARENA_API_KEY must be configured before hosted inference/history is enabled"})
     if requires_auth and configured_key:
         supplied = request.headers.get("x-api-key", "")
         authorization = request.headers.get("authorization", "")
@@ -124,7 +127,12 @@ def readiness():
         check_storage()
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Database readiness check failed") from exc
-    return {"status": "ready", "storage": "connected"}
+    if required and not os.getenv("AGENTARENA_API_KEY", "").strip():
+        raise HTTPException(status_code=503, detail="AGENTARENA_API_KEY is required for hosted readiness")
+    provider_url = os.getenv("BIFROST_BASE_URL", "http://localhost:8080").strip().rstrip("/")
+    if required and (not provider_url or "localhost" in provider_url or "127.0.0.1" in provider_url):
+        raise HTTPException(status_code=503, detail="BIFROST_BASE_URL must point to a reachable hosted gateway")
+    return {"status": "ready", "storage": "connected", "provider": "configured" if provider_url else "missing"}
 
 
 @app.post("/api/v1/runs")
