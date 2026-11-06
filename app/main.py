@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.engine import AgentResponse, BenchmarkTask, run_task
 from app.metrics import summarize_runs
-from app.providers.bifrost import BifrostError, call_bifrost
+from app.providers.bifrost import BifrostError, call_bifrost, attach_trace_cost
 from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
 from app.tasks import BUILTIN_TASKS
 
@@ -110,7 +110,7 @@ def create_bifrost_run(request: BifrostRunRequest):
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    return result.__dict__
+    return attach_trace_cost(result.__dict__)
 
 
 @app.post("/api/v1/bifrost-benchmarks")
@@ -136,7 +136,7 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
                     f"bifrost-tool-agent:{model}",
                     lambda prompt: run_bifrost_tool_agent(prompt, model, request.fault_mode),
                 )
-                record = result.__dict__
+                record = attach_trace_cost(result.__dict__)
                 record["trial"] = trial
             except BifrostError as exc:
                 record = {
