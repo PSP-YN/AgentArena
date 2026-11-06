@@ -1,10 +1,12 @@
 from pathlib import Path
+import os
 import time
+import hmac
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from app.engine import AgentResponse, BenchmarkTask, run_task
@@ -13,38 +15,69 @@ from app.providers.bifrost import BifrostError, call_bifrost, attach_trace_cost
 from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
 from app.tasks import BUILTIN_TASKS
 
-app = FastAPI(title="AgentArena", version="0.1.0", description="Reproducible AI agent benchmark runner")
+app = FastAPI(
+    title="AgentArena",
+    version="0.2.0",
+    description="Reproducible AI agent benchmark runner",
+)
+
+
+@app.middleware("http")
+async def protect_expensive_api_routes(request: Request, call_next):
+    """Optional API-key protection for endpoints that can trigger inference/cost.
+
+    Set AGENTARENA_API_KEY in production. Local development remains frictionless
+    when the variable is unset. The key is never returned in responses.
+    """
+    protected = {
+        "/api/v1/runs",
+        "/api/v1/bifrost-runs",
+        "/api/v1/bifrost-benchmarks",
+    }
+    configured_key = os.getenv("AGENTARENA_API_KEY", "").strip()
+    if request.method == "POST" and request.url.path in protected and configured_key:
+        supplied = request.headers.get("x-api-key", "")
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            supplied = authorization[7:].strip()
+        if not supplied or not hmac.compare_digest(supplied, configured_key):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Valid API key required"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+    return await call_next(request)
 
 
 class RunRequest(BaseModel):
-    task_id: str = Field(min_length=1)
-    prompt: str
-    expected_output: str
-    actual_output: str
-    agent_name: str = "manual-adapter"
-    scorer: str = "normalized_exact_match"
-    steps: int = Field(default=1, ge=1)
-    tool_calls: int = Field(default=0, ge=0)
+    task_id: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(max_length=12000)
+    expected_output: str = Field(max_length=4000)
+    actual_output: str = Field(max_length=12000)
+    agent_name: str = Field(default="manual-adapter", max_length=120)
+    scorer: str = Field(default="normalized_exact_match", max_length=64)
+    steps: int = Field(default=1, ge=1, le=1000)
+    tool_calls: int = Field(default=0, ge=0, le=10000)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     cost_usd: float | None = Field(default=None, ge=0)
 
 
 class BifrostRunRequest(BaseModel):
-    task_id: str = Field(min_length=1)
-    prompt: str = Field(min_length=1)
-    expected_output: str
-    model: str = Field(min_length=1, description="Bifrost model route, e.g. provider/model")
-    scorer: str = "normalized_exact_match"
+    task_id: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=12000)
+    expected_output: str = Field(max_length=4000)
+    model: str = Field(min_length=1, max_length=200, description="Bifrost model route, e.g. provider/model")
+    scorer: str = Field(default="normalized_exact_match", max_length=64)
 
 
 class BifrostBenchmarkRequest(BaseModel):
-    task_id: str = Field(min_length=1)
-    prompt: str = Field(min_length=1)
-    expected_output: str
+    task_id: str = Field(min_length=1, max_length=120)
+    prompt: str = Field(min_length=1, max_length=12000)
+    expected_output: str = Field(max_length=4000)
     models: list[str] = Field(min_length=1, max_length=3)
     repeats: int = Field(default=2, ge=1, le=5)
-    scorer: str = "normalized_exact_match"
+    scorer: str = Field(default="normalized_exact_match", max_length=64)
     fault_mode: Literal["none", "tool_error_once", "misleading_tool_output", "provider_outage"] = "none"
 
 
@@ -60,7 +93,7 @@ def list_tasks():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "AgentArena", "version": "0.1.0"}
+    return {"status": "ok", "service": "AgentArena", "version": app.version}
 
 
 @app.post("/api/v1/runs")
@@ -117,6 +150,8 @@ def create_bifrost_run(request: BifrostRunRequest):
 def compare_bifrost_models(request: BifrostBenchmarkRequest):
     if len(set(request.models)) != len(request.models):
         raise HTTPException(status_code=422, detail="Model routes must be unique")
+    if any(not model.strip() for model in request.models):
+        raise HTTPException(status_code=422, detail="Model routes cannot be blank")
 
     task = BenchmarkTask(
         task_id=request.task_id,
