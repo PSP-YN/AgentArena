@@ -21,3 +21,25 @@ def test_summary_reports_known_total_cost():
     ])
     assert summary["total_cost_usd"] == 0.03
     assert summary["cost_status"] == "complete"
+
+
+def test_summary_reports_reliability_and_latency_distribution():
+    summary = summarize_runs([
+        {"success": True, "score": 1.0, "duration_ms": 100, "steps": 2, "tool_calls": 1, "cost_usd": 0.01},
+        {"success": False, "score": 0.0, "duration_ms": 200, "steps": 3, "tool_calls": 2, "cost_usd": 0.02},
+        {"success": True, "score": 1.0, "duration_ms": 300, "steps": 2, "tool_calls": 0, "cost_usd": None},
+    ])
+    assert summary["success_count"] == 2
+    assert summary["failure_count"] == 1
+    assert summary["success_rate"] == 0.667
+    assert summary["median_duration_ms"] == 200
+    assert summary["p95_duration_ms"] == 290
+    assert summary["total_tool_calls"] == 3
+    assert summary["total_cost_usd"] is None
+
+
+def test_empty_summary_keeps_unknown_values_null():
+    summary = summarize_runs([])
+    assert summary["run_count"] == 0
+    assert summary["success_rate"] is None
+    assert summary["total_cost_usd"] is None
