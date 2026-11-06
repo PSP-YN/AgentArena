@@ -11,6 +11,7 @@ from app.engine import AgentResponse, BenchmarkTask, run_task
 from app.metrics import summarize_runs
 from app.providers.bifrost import BifrostError, call_bifrost
 from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
+from app.tasks import BUILTIN_TASKS
 
 app = FastAPI(title="AgentArena", version="0.1.0", description="Reproducible AI agent benchmark runner")
 
@@ -50,6 +51,11 @@ class BifrostBenchmarkRequest(BaseModel):
 @app.get("/")
 def root():
     return RedirectResponse(url="/ui/")
+
+
+@app.get("/api/v1/tasks")
+def list_tasks():
+    return {"tasks": BUILTIN_TASKS}
 
 
 @app.get("/health")
