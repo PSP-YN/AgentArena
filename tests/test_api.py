@@ -116,9 +116,12 @@ def test_readiness_requires_database_when_configured(monkeypatch):
 def test_readiness_checks_configured_database(monkeypatch, tmp_path):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ready.db'}")
     monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    monkeypatch.setenv("AGENTARENA_API_KEY", "production-secret")
+    monkeypatch.setenv("BIFROST_BASE_URL", "https://gateway.example")
     response = client.get("/ready")
     assert response.status_code == 200
     assert response.json()["storage"] == "connected"
+    assert response.json()["provider"] == "configured"
 
 
 def test_bifrost_rejects_unknown_scorer_before_provider_call():
@@ -141,3 +144,33 @@ def test_benchmark_model_route_length_is_bounded():
         "repeats": 1,
     })
     assert response.status_code == 422
+
+
+
+def test_production_readiness_fails_without_api_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'auth-required.db'}")
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    monkeypatch.delenv("AGENTARENA_API_KEY", raising=False)
+    monkeypatch.setenv("BIFROST_BASE_URL", "https://gateway.example")
+    assert client.get("/ready").status_code == 503
+
+
+def test_production_readiness_rejects_localhost_gateway(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'gateway-required.db'}")
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    monkeypatch.setenv("AGENTARENA_API_KEY", "production-secret")
+    monkeypatch.setenv("BIFROST_BASE_URL", "http://localhost:8080")
+    assert client.get("/ready").status_code == 503
+
+
+def test_production_inference_fails_closed_without_api_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'inference-auth.db'}")
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    monkeypatch.delenv("AGENTARENA_API_KEY", raising=False)
+    response = client.post("/api/v1/runs", json={
+        "task_id": "production-auth",
+        "prompt": "Return answer",
+        "expected_output": "done",
+        "actual_output": "done",
+    })
+    assert response.status_code == 503
