@@ -49,7 +49,8 @@ The gateway adapter uses the OpenAI-compatible `/v1/chat/completions` endpoint. 
 
 ## API
 
-- `GET /health`
+- `GET /health` — process liveness
+- `GET /ready` — database readiness for hosted deployments
 - `GET /api/v1/tasks` — built-in controlled benchmark scenario catalog
 - `POST /api/v1/runs` — manual adapter output to exercise scoring
 - `POST /api/v1/bifrost-runs` — single Bifrost chat completion
