@@ -119,3 +119,25 @@ def test_readiness_checks_configured_database(monkeypatch, tmp_path):
     response = client.get("/ready")
     assert response.status_code == 200
     assert response.json()["storage"] == "connected"
+
+
+def test_bifrost_rejects_unknown_scorer_before_provider_call():
+    response = client.post("/api/v1/bifrost-runs", json={
+        "task_id": "invalid-scorer",
+        "prompt": "This must not reach a model provider",
+        "expected_output": "done",
+        "model": "provider/model",
+        "scorer": "made_up_scorer",
+    })
+    assert response.status_code == 422
+
+
+def test_benchmark_model_route_length_is_bounded():
+    response = client.post("/api/v1/bifrost-benchmarks", json={
+        "task_id": "long-model",
+        "prompt": "test",
+        "expected_output": "done",
+        "models": ["m" * 201],
+        "repeats": 1,
+    })
+    assert response.status_code == 422
