@@ -2,29 +2,21 @@
 
 Framework-independent benchmarking for AI agents: task success, tool calls, latency, token/cost accounting, reliability, and execution traces.
 
-> Early development — initial scaffold. Metrics will be labeled as measured, estimated, or unavailable; AgentArena will not fabricate benchmark results.
+> Hackathon MVP in active development. The API and UI are an early prototype; results are not yet a validated benchmark suite.
 
-## Status
+## Current implementation
 
-Project initialization is complete. The implementation roadmap and first benchmark engine are being developed.
+- FastAPI service and browser dashboard
+- Deterministic normalized exact-match and contains scorers
+- Execution timing and trace capture
+- Explicit unknown/null token and cost values rather than fabricated metrics
+- Bifrost OpenAI-compatible Chat Completions adapter
+- Manual-output route for testing scoring separately from model execution
+- Pytest and GitHub Actions CI
 
-## Planned stack
+## Quick start
 
-- Python 3.12+
-- FastAPI API layer
-- Pydantic task/agent contracts
-- SQLite for local runs (initial)
-- Pytest
-
-## Design principles
-
-- Repeatable tasks and explicit scoring criteria
-- Per-run trace records
-- Clear separation between observed metrics and estimates
-- No API keys committed to source control
-- Failure cases are first-class benchmark outcomes
-
-## Local development
+Requirements: Python 3.12+ and a running Bifrost gateway for live model calls.
 
 ```bash
 python -m venv .venv
@@ -33,13 +25,53 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-## Planned modules
+Open the dashboard at http://localhost:8000 and API docs at http://localhost:8000/docs.
 
-- `app/models.py`: task, agent, run and result schemas
-- `app/runner.py`: isolated task execution and timing
-- `app/metrics.py`: metrics aggregation
-- `app/main.py`: API endpoints
-- `tests/`: unit and integration tests
+## Bifrost configuration
+
+Start Bifrost (for example, with its official local Docker/NPX quickstart), configure at least one provider/model, then set:
+
+```bash
+export BIFROST_BASE_URL=http://localhost:8080
+export BIFROST_API_KEY= # optional if your gateway requires it
+```
+
+The dashboard's live mode sends a model route such as `openai/gpt-4o-mini` to `POST /api/v1/bifrost-runs`. The adapter calls Bifrost's OpenAI-compatible `/v1/chat/completions` endpoint.
+
+## API
+
+- `GET /health`
+- `POST /api/v1/runs` — manual adapter output, to exercise the scorer
+- `POST /api/v1/bifrost-runs` — live Bifrost model call and scoring
+- `GET /docs` — OpenAPI docs
+
+Example request:
+
+```json
+{
+  "task_id": "exact-match-001",
+  "prompt": "Answer with one word: Paris",
+  "expected_output": "Paris",
+  "model": "openai/gpt-4o-mini",
+  "scorer": "normalized_exact_match"
+}
+```
+
+## Metric integrity
+
+- Latency is measured by the app around the adapter call.
+- Token counts are reported only when the gateway returns usage.
+- Tool calls are currently counted from returned message tool calls; this is not yet a full tool-execution trace.
+- Cost is unknown unless a trusted cost source is added; it is not estimated.
+- Exact-match scoring is intentionally simple. More task types and rubric-based evaluators are planned.
+
+## Next
+
+1. Persist runs and compare repeated trials
+2. Add agent adapters and benchmark task catalog
+3. Add failure injection and outage testing
+4. Improve traces, evaluation criteria and statistical summaries
+5. Validate metrics across repeated real runs
 
 ## Hackathon
 
