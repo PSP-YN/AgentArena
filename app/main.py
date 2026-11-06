@@ -20,6 +20,7 @@ class RunRequest(BaseModel):
     actual_output: str
     agent_name: str = "manual-adapter"
     scorer: str = "normalized_exact_match"
+    steps: int = Field(default=1, ge=1)
     tool_calls: int = Field(default=0, ge=0)
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
@@ -65,6 +66,7 @@ def create_run(request: RunRequest):
     def adapter(_prompt: str) -> AgentResponse:
         return AgentResponse(
             output=request.actual_output,
+            steps=request.steps,
             tool_calls=request.tool_calls,
             input_tokens=request.input_tokens,
             output_tokens=request.output_tokens,
@@ -130,6 +132,7 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
                     "success": False,
                     "score": 0.0,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+                    "steps": 1,
                     "tool_calls": 0,
                     "input_tokens": None,
                     "output_tokens": None,
