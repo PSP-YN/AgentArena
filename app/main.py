@@ -1,5 +1,6 @@
 from pathlib import Path
 import time
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.engine import AgentResponse, BenchmarkTask, run_task
 from app.metrics import summarize_runs
 from app.providers.bifrost import BifrostError, call_bifrost
+from app.agents.bifrost_tool_agent import run_bifrost_tool_agent
 
 app = FastAPI(title="AgentArena", version="0.1.0", description="Reproducible AI agent benchmark runner")
 
@@ -42,6 +44,7 @@ class BifrostBenchmarkRequest(BaseModel):
     models: list[str] = Field(min_length=1, max_length=3)
     repeats: int = Field(default=2, ge=1, le=5)
     scorer: str = "normalized_exact_match"
+    fault_mode: Literal["none", "tool_error_once", "misleading_tool_output", "provider_outage"] = "none"
 
 
 @app.get("/")
@@ -122,17 +125,21 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
         for trial in range(1, request.repeats + 1):
             started = time.perf_counter()
             try:
-                result = run_task(task, f"bifrost:{model}", lambda prompt: call_bifrost(prompt, model))
+                result = run_task(
+                    task,
+                    f"bifrost-tool-agent:{model}",
+                    lambda prompt: run_bifrost_tool_agent(prompt, model, request.fault_mode),
+                )
                 record = result.__dict__
                 record["trial"] = trial
             except BifrostError as exc:
                 record = {
                     "task_id": task.task_id,
-                    "agent_name": f"bifrost:{model}",
+                    "agent_name": f"bifrost-tool-agent:{model}",
                     "success": False,
                     "score": 0.0,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 3),
-                    "steps": 1,
+                    "steps": 0,
                     "tool_calls": 0,
                     "input_tokens": None,
                     "output_tokens": None,
@@ -152,6 +159,7 @@ def compare_bifrost_models(request: BifrostBenchmarkRequest):
     return {
         "task_id": task.task_id,
         "repeats_per_model": request.repeats,
+        "fault_mode": request.fault_mode,
         "models": comparisons,
         "note": "Observed metrics only. Cost is null unless all runs provide trusted cost values.",
     }
