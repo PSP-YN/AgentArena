@@ -8,6 +8,7 @@ from __future__ import annotations
 import ast
 import json
 import os
+import uuid
 from typing import Any
 
 import httpx
@@ -160,11 +161,13 @@ def run_bifrost_tool_agent(
     fault_used = False
 
     for step in range(1, max_steps + 1):
+        request_id = str(uuid.uuid4())
+        request_headers = {**headers, "x-request-id": request_id}
         try:
             with httpx.Client(timeout=timeout) as client:
                 response = client.post(
                     f"{base_url}/v1/chat/completions",
-                    headers=headers,
+                    headers=request_headers,
                     json={
                         "model": model,
                         "messages": messages,
@@ -189,7 +192,8 @@ def run_bifrost_tool_agent(
         trace.append({
             "event": "model_step",
             "step": step,
-            "request_id": payload.get("id"),
+            "request_id": request_id,
+            "bifrost_response_id": payload.get("id"),
             "usage_available": bool(usage),
             "tool_call_count": len(tool_calls),
         })
