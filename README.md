@@ -112,3 +112,31 @@ For hosted runs, configure these in the Vercel project settings (never commit th
 ## Privacy
 
 AgentArena sends benchmark prompts and tool messages to the configured Bifrost model/provider. Use non-sensitive tasks. Bifrost logging is controlled by your gateway configuration; the app does not persist benchmark history in a database in this MVP.
+
+
+## Production hardening (branch: production-hardening)
+
+The API now supports optional protection for inference-triggering POST endpoints:
+
+- `POST /api/v1/runs`
+- `POST /api/v1/bifrost-runs`
+- `POST /api/v1/bifrost-benchmarks`
+
+Set `AGENTARENA_API_KEY` to a long, random secret in the server environment. Clients can send it as either `Authorization: Bearer <key>` or `x-api-key: <key>`. When unset, the API remains unauthenticated for local development. **Do not leave this unset on a public deployment that permits model calls.**
+
+Input sizes and counts are bounded using Pydantic validation. Requests exceeding the documented field limits receive HTTP 422.
+
+### Production deployment checklist
+
+- [ ] Set `AGENTARENA_API_KEY` using the hosting provider's secret manager.
+- [ ] Set `BIFROST_BASE_URL` to a reachable gateway URL (not localhost from a hosted runtime).
+- [ ] Set `BIFROST_API_KEY` only if the gateway requires inference authentication.
+- [ ] Set `BIFROST_LOGS_API_KEY` only when trusted cost logs are available.
+- [ ] Confirm HTTPS, server-side secrets, and restricted gateway access.
+- [ ] Run CI and verify the deployed health endpoint.
+- [ ] Run a small live benchmark and verify observed metrics and traces.
+- [ ] Keep the public demo read-only or protected from unauthorized inference spending.
+
+### Security limitations
+
+API-key middleware is a lightweight shared-secret gate, not a complete identity or tenant system. It does not provide per-user quotas, key rotation workflows, audit retention, billing isolation, or database-backed run history. For multi-user production use, add a proper identity provider, per-user authorization, rate limiting, and durable storage before opening inference access broadly.
