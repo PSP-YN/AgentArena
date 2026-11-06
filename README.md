@@ -4,6 +4,10 @@ Framework-independent benchmarking for AI agents: task success, tool calls, late
 
 > Hackathon MVP in active development. The current prototype supports controlled tool-agent runs and resilience scenarios; its benchmark suite and scoring methodology are not yet externally validated.
 
+## Architecture
+
+See [`docs/architecture.md`](docs/architecture.md) for the architecture and measurement contract.
+
 ## Current implementation
 
 - FastAPI service and browser dashboard
