@@ -69,3 +69,39 @@ def test_request_limits_are_validated():
 def test_health_is_public_when_api_key_enabled(monkeypatch):
     monkeypatch.setenv("AGENTARENA_API_KEY", "test-secret")
     assert client.get("/health").status_code == 200
+
+
+def test_database_required_blocks_inference_without_database(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    response = client.post("/api/v1/runs", json={
+        "task_id": "db-required",
+        "prompt": "Return answer",
+        "expected_output": "done",
+        "actual_output": "done",
+    })
+    assert response.status_code == 503
+    assert "DATABASE_URL" in response.json()["detail"]
+
+
+def test_manual_run_is_persisted_and_history_is_readable(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'agentarena.db'}")
+    monkeypatch.delenv("AGENTARENA_REQUIRE_DATABASE", raising=False)
+    run = client.post("/api/v1/runs", json={
+        "task_id": "persist-test",
+        "prompt": "Return answer",
+        "expected_output": "done",
+        "actual_output": "done",
+    })
+    assert run.status_code == 200
+    history = client.get("/api/v1/history")
+    assert history.status_code == 200
+    assert history.json()["runs"][0]["run_id"] == run.json()["run_id"]
+
+
+def test_history_is_protected_when_api_key_is_configured(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'agentarena.db'}")
+    monkeypatch.setenv("AGENTARENA_API_KEY", "history-secret")
+    assert client.get("/api/v1/history").status_code == 401
+    response = client.get("/api/v1/history", headers={"x-api-key": "history-secret"})
+    assert response.status_code == 200
