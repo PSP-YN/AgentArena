@@ -49,9 +49,11 @@ def call_bifrost(prompt: str, model: str, timeout: float = 90.0) -> AgentRespons
         raise BifrostError("Bifrost response did not contain text content")
 
     usage = payload.get("usage") or {}
+    returned_tool_calls = len(message.get("tool_calls") or [])
     return AgentResponse(
         output=content,
-        tool_calls=len(message.get("tool_calls") or []),
+        steps=1,
+        tool_calls=returned_tool_calls,
         input_tokens=usage.get("prompt_tokens"),
         output_tokens=usage.get("completion_tokens"),
         cost_usd=None,
@@ -60,5 +62,7 @@ def call_bifrost(prompt: str, model: str, timeout: float = 90.0) -> AgentRespons
             "model": model,
             "request_id": payload.get("id"),
             "provider_metrics_available": bool(usage),
+            "tool_calls_returned_by_model": returned_tool_calls,
+            "note": "Model-emitted tool calls are counted; tools are not executed by this single-call adapter.",
         }],
     )
