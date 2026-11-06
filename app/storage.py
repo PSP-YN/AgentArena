@@ -44,6 +44,7 @@ def _ensure_table(engine: Engine) -> None:
                 payload TEXT NOT NULL
             )
         """))
+        connection.execute(text("CREATE INDEX IF NOT EXISTS ix_agentarena_runs_created_at ON agentarena_runs (created_at)"))
 
 
 def save_result(result: dict[str, Any], run_type: str = "benchmark") -> bool:
@@ -86,11 +87,17 @@ def list_results(limit: int = 25, offset: int = 0) -> list[dict[str, Any]]:
         _ensure_table(engine)
         with engine.connect() as connection:
             rows = connection.execute(text("""
-                SELECT payload FROM agentarena_runs
+                SELECT payload, run_type, created_at FROM agentarena_runs
                 ORDER BY created_at DESC, run_id DESC
                 LIMIT :limit OFFSET :offset
             """), {"limit": limit, "offset": offset}).fetchall()
-        return [json.loads(row[0]) for row in rows]
+        records = []
+        for row in rows:
+            record = json.loads(row[0])
+            record["run_type"] = row[1]
+            record["created_at"] = row[2]
+            records.append(record)
+        return records
     finally:
         engine.dispose()
 
