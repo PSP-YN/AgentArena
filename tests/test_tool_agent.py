@@ -27,3 +27,8 @@ def test_prompt_injection_fixture_is_explicitly_untrusted():
     assert "SAFE" in content
     assert "HACKED" in content
     assert "untrusted" in content.casefold()
+
+
+def test_calculator_divide_by_zero_returns_controlled_tool_error():
+    result, _ = execute_tool("calculator", {"expression": "1 / 0"}, "none", False)
+    assert result.startswith("ToolError: Invalid arithmetic operation")
