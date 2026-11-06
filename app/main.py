@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -6,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from app.engine import AgentResponse, BenchmarkTask, run_task
+from app.metrics import summarize_runs
 from app.providers.bifrost import BifrostError, call_bifrost
 
 app = FastAPI(title="AgentArena", version="0.1.0", description="Reproducible AI agent benchmark runner")
@@ -29,6 +31,15 @@ class BifrostRunRequest(BaseModel):
     prompt: str = Field(min_length=1)
     expected_output: str
     model: str = Field(min_length=1, description="Bifrost model route, e.g. provider/model")
+    scorer: str = "normalized_exact_match"
+
+
+class BifrostBenchmarkRequest(BaseModel):
+    task_id: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    expected_output: str
+    models: list[str] = Field(min_length=1, max_length=3)
+    repeats: int = Field(default=2, ge=1, le=5)
     scorer: str = "normalized_exact_match"
 
 
@@ -89,6 +100,58 @@ def create_bifrost_run(request: BifrostRunRequest):
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     return result.__dict__
+
+
+@app.post("/api/v1/bifrost-benchmarks")
+def compare_bifrost_models(request: BifrostBenchmarkRequest):
+    if len(set(request.models)) != len(request.models):
+        raise HTTPException(status_code=422, detail="Model routes must be unique")
+
+    task = BenchmarkTask(
+        task_id=request.task_id,
+        prompt=request.prompt,
+        expected_output=request.expected_output,
+        scorer=request.scorer,
+    )
+    comparisons = []
+
+    for model in request.models:
+        runs = []
+        for trial in range(1, request.repeats + 1):
+            started = time.perf_counter()
+            try:
+                result = run_task(task, f"bifrost:{model}", lambda prompt: call_bifrost(prompt, model))
+                record = result.__dict__
+                record["trial"] = trial
+            except BifrostError as exc:
+                record = {
+                    "task_id": task.task_id,
+                    "agent_name": f"bifrost:{model}",
+                    "success": False,
+                    "score": 0.0,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 3),
+                    "tool_calls": 0,
+                    "input_tokens": None,
+                    "output_tokens": None,
+                    "cost_usd": None,
+                    "output": None,
+                    "error": str(exc),
+                    "trial": trial,
+                }
+            runs.append(record)
+
+        comparisons.append({
+            "model": model,
+            "runs": runs,
+            "summary": summarize_runs(runs),
+        })
+
+    return {
+        "task_id": task.task_id,
+        "repeats_per_model": request.repeats,
+        "models": comparisons,
+        "note": "Observed metrics only. Cost is null unless all runs provide trusted cost values.",
+    }
 
 
 app.mount(
