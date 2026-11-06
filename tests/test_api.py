@@ -105,3 +105,17 @@ def test_history_is_protected_when_api_key_is_configured(monkeypatch, tmp_path):
     assert client.get("/api/v1/history").status_code == 401
     response = client.get("/api/v1/history", headers={"x-api-key": "history-secret"})
     assert response.status_code == 200
+
+
+def test_readiness_requires_database_when_configured(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    assert client.get("/ready").status_code == 503
+
+
+def test_readiness_checks_configured_database(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'ready.db'}")
+    monkeypatch.setenv("AGENTARENA_REQUIRE_DATABASE", "true")
+    response = client.get("/ready")
+    assert response.status_code == 200
+    assert response.json()["storage"] == "connected"
