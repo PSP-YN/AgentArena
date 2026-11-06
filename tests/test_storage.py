@@ -12,7 +12,10 @@ def test_save_and_list_results_with_sqlite(tmp_path, monkeypatch):
     }
     assert save_result(record, "test")
     rows = list_results(limit=10, offset=0)
-    assert rows == [record]
+    assert len(rows) == 1
+    assert {key: rows[0][key] for key in record} == record
+    assert rows[0]["run_type"] == "test"
+    assert rows[0]["created_at"]
 
 
 def test_storage_is_disabled_without_database_url(monkeypatch):
