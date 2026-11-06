@@ -49,3 +49,25 @@ def test_tool_loop_executes_calculator_and_aggregates_usage(monkeypatch):
     assert result.input_tokens == 30
     assert result.output_tokens == 4
     assert any(item["event"] == "tool_call" for item in result.trace)
+
+
+def test_tool_loop_recovers_after_injected_tool_error(monkeypatch):
+    tool_call = {
+        "id": "call-retry",
+        "type": "function",
+        "function": {"name": "calculator", "arguments": json.dumps({"expression": "1 + 1"})},
+    }
+    FakeClient.responses = [
+        {"choices": [{"message": {"content": None, "tool_calls": [tool_call]}}], "usage": {"prompt_tokens": 1, "completion_tokens": 1}},
+        {"choices": [{"message": {"content": None, "tool_calls": [tool_call]}}], "usage": {"prompt_tokens": 2, "completion_tokens": 1}},
+        {"choices": [{"message": {"content": "2", "tool_calls": []}}], "usage": {"prompt_tokens": 3, "completion_tokens": 1}},
+    ]
+    monkeypatch.setattr("app.agents.bifrost_tool_agent.httpx.Client", FakeClient)
+
+    result = run_bifrost_tool_agent("Calculate 1 + 1", "test/model", fault_mode="tool_error_once")
+    tool_events = [item for item in result.trace if item["event"] == "tool_call"]
+    assert result.output == "2"
+    assert result.steps == 3
+    assert result.tool_calls == 2
+    assert tool_events[0]["result_type"] == "error"
+    assert tool_events[1]["result_type"] == "success"
